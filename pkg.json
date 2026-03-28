@@ -1,0 +1,12 @@
+{
+  "pkg": {
+    "assets": [
+      "config.json",
+      "data/**/*",
+      "node_modules/selenium-webdriver/**/*",
+      "node_modules/puppeteer-core/**/*",
+      "node_modules/xlsx/**/*"
+    ],
+    "outputPath": "dist"
+  }
+}
