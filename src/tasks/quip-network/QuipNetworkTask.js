@@ -2,7 +2,7 @@ import { By, until } from 'selenium-webdriver';
 import BaseTask from '../BaseTask.js';
 import { sleep } from '../../utils/humanBehavior.js';
 
-const WEBSITE_URL = 'https://quest.quip.network/airdrop';
+const getWebsiteUrl = () => process.env.QUIP_REFERRAL_URL || 'https://quest.quip.network/airdrop';
 
 /**
  * Flow verified qua Playwright MCP inspect GPM browser (2026-03-28):
@@ -30,6 +30,9 @@ const LOCATORS = {
   connectWithEthereumFallback: By.xpath('//button[contains(.,"Connect with Ethereum")]'),
   connectXButton: By.xpath('//button[contains(text(),"Connect X")]'),
   authorizeAppButton: By.xpath('//button[contains(.,"Authorize app")]'),
+  goToAccountLink: By.xpath('//a[contains(.,"Go to Account")]'),
+  followButton: By.xpath('(//button[.//span[text()="Follow"]])[1]'),
+  claimButton: By.xpath('(//span[text()="Claim"])[1]'),
 };
 
 export default class QuipNetworkTask extends BaseTask {
@@ -45,8 +48,8 @@ export default class QuipNetworkTask extends BaseTask {
     await wallet.unlock(walletPassword);
 
     // Step 2: Navigate to Quip
-    logger.info(`Navigating to ${WEBSITE_URL}`);
-    await driver.get(WEBSITE_URL);
+    logger.info(`Navigating to ${getWebsiteUrl()}`);
+    await driver.get(getWebsiteUrl());
     await sleep(5000);
 
     // Update mainHandle to the Quip tab (unlock may have changed active tab)
@@ -62,25 +65,33 @@ export default class QuipNetworkTask extends BaseTask {
       logger.info('Wallet already connected — skipping wallet connect');
     }
 
-    // Step 4: Reload to ensure Connect X button is visible
-    logger.info('Reloading page before Connect X...');
-    await driver.get(WEBSITE_URL);
+    // Step 4: Reload to ensure buttons are visible
+    logger.info('Reloading page...');
+    await driver.get(getWebsiteUrl());
     await sleep(5000);
 
-    // Step 5: Connect X (Twitter)
-    await this._connectX(driver, logger);
+    // Check if "Go to Account" already visible → X already connected, skip Connect X
+    const alreadyConnectedX = await this._findOptional(driver, LOCATORS.goToAccountLink, 3000);
+    if (alreadyConnectedX) {
+      logger.info('Go to Account found — X already connected, skipping Connect X');
+    } else {
+      // Step 5: Connect X (Twitter)
+      await this._connectX(driver, logger);
 
-    // Step 5: Verify final state
-    await driver.navigate().refresh();
-    await sleep(5000);
+      // Reload after Connect X
+      await driver.get(getWebsiteUrl());
+      await sleep(5000);
+    }
+
+    // Step 6: Follow X account + Claim
+    const claimed = await this._followAndClaim(driver, logger);
 
     const pageSource = await driver.getPageSource();
     const walletConnected = !pageSource.includes('>Connect Wallet<') && !pageSource.includes('>Connect<');
-    // After X connected, button changes from "Connect X" to something else (e.g. "Verify" or disappears)
     const xConnected = !pageSource.includes('Connect X');
 
-    logger.info(`Result: wallet=${walletConnected}, x=${xConnected}`);
-    return { success: true, data: { walletConnected, xConnected } };
+    logger.info(`Result: wallet=${walletConnected}, x=${xConnected}, claimed=${claimed}`);
+    return { success: claimed, data: { walletConnected, xConnected, claimed } };
   }
 
   // ==================== Connect Wallet ====================
@@ -223,6 +234,73 @@ export default class QuipNetworkTask extends BaseTask {
       }
     } else {
       logger.info(`Not redirected to X. Current URL: ${currentUrl}`);
+    }
+  }
+
+  // ==================== Follow X + Claim ====================
+
+  async _followAndClaim(driver, logger) {
+    // Click "Go to Account" link
+    logger.info('Clicking Go to Account...');
+    const goToBtn = await this._findOptional(driver, LOCATORS.goToAccountLink, 5000);
+    if (!goToBtn) {
+      logger.info('Go to Account button not found — skipping follow & claim');
+      return false;
+    }
+
+    // Save main tab handle before clicking
+    const mainHandle = await driver.getWindowHandle();
+    await driver.executeScript('arguments[0].click();', goToBtn);
+    await sleep(5000);
+
+    // Switch to the new X tab
+    const allHandles = await driver.getAllWindowHandles();
+    const xTab = allHandles.find(h => h !== mainHandle);
+    if (!xTab) {
+      logger.warn('X tab not opened');
+      return;
+    }
+
+    await driver.switchTo().window(xTab);
+    const xUrl = await driver.getCurrentUrl();
+    logger.info(`Switched to X tab: ${xUrl}`);
+
+    // Wait for Follow button and click
+    const followBtn = await this._findOptional(driver, LOCATORS.followButton, 10000);
+    if (followBtn) {
+      await driver.executeScript('arguments[0].click();', followBtn);
+      logger.info('Clicked Follow');
+      await sleep(3000);
+    } else {
+      logger.warn('Follow button not found — may already be following');
+    }
+
+    // Close X tab and switch back to main
+    await driver.close();
+    await driver.switchTo().window(mainHandle);
+    logger.info('Closed X tab, back to main');
+    await sleep(3000);
+
+    // Click Claim button
+    logger.info('Clicking Claim...');
+    const claimBtn = await this._findOptional(driver, LOCATORS.claimButton, 5000);
+    if (claimBtn) {
+      await driver.executeScript('arguments[0].click();', claimBtn);
+      logger.info('Clicked Claim');
+      await sleep(3000);
+
+      // Check for "Great job!" success message
+      const greatJob = await this._findOptional(driver, By.xpath('//*[contains(text(),"Great job")]'), 10000);
+      if (greatJob) {
+        logger.info('Great job! — Claim successful');
+        return true;
+      } else {
+        logger.warn('Great job! message not found after claim');
+        return false;
+      }
+    } else {
+      logger.warn('Claim button not found');
+      return false;
     }
   }
 

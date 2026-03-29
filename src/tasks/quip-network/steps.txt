@@ -65,7 +65,28 @@ STEP 12: Authorize X
   - Wait 8s
   - Check if redirected back to quip.network
 
-STEP 13: Verify final state
+STEP 13: Click "Go to Account"
+  - Find link "Go to Account" on Quip page
+  - Click → opens new tab to https://x.com/quipnetwork
+  - Wait 5s
+
+STEP 14: Follow on X
+  - Switch to X tab
+  - Wait for Follow button: (//button[.//span[text()='Follow']])[1]
+  - Click Follow
+  - Wait 3s
+
+STEP 15: Close X tab, back to main
+  - Close current X tab
+  - Switch back to Quip main tab
+  - Wait 3s
+
+STEP 16: Click "Claim"
+  - Find Claim button: (//span[text()='Claim'])[1]
+  - Click via JS
+  - Wait 3s
+
+STEP 17: Verify final state
   - Refresh page
   - Check walletConnected (no "Connect Wallet" button)
   - Check xConnected (no "Connect X" button)

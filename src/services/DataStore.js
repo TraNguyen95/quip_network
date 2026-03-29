@@ -61,27 +61,61 @@ export default class DataStore {
   }
 
   filterByRange(accounts, rangeStr) {
-    // Format: A0001-A0020
-    const match = rangeStr.match(/^([A-Za-z]*)(\d+)-([A-Za-z]*)(\d+)$/);
-    if (!match) {
-      this.log.error(`Invalid range format: ${rangeStr}. Expected: A0001-A0020`);
-      return accounts;
+    // Support formats: A0001-A0020, P-20260329-0001-P-20260329-0020
+    // Split on last occurrence of prefix boundary: find where end prefix+number starts
+    // Strategy: extract trailing number from both sides
+    const parts = rangeStr.split('-');
+
+    // Try simple format first: PREFIX0001-PREFIX0020 (no dash in prefix)
+    const simpleMatch = rangeStr.match(/^([A-Za-z]*)(\d+)-([A-Za-z]*)(\d+)$/);
+    if (simpleMatch) {
+      const prefix = simpleMatch[1];
+      const start = parseInt(simpleMatch[2], 10);
+      const end = parseInt(simpleMatch[4], 10);
+      const filtered = accounts.filter((acc) => {
+        if (!acc.profileName) return false;
+        const m = acc.profileName.match(/^([A-Za-z]*)(\d+)$/);
+        if (!m || m[1] !== prefix) return false;
+        const num = parseInt(m[2], 10);
+        return num >= start && num <= end;
+      });
+      this.log.info(`Filtered ${filtered.length}/${accounts.length} accounts for range: ${rangeStr}`);
+      return filtered;
     }
 
-    const prefix = match[1];
-    const start = parseInt(match[2], 10);
-    const end = parseInt(match[4], 10);
+    // Complex format: prefix-with-dashes-0001~prefix-with-dashes-0020 (~ separator)
+    // Or auto-detect: split by finding two profile names that share a prefix
+    // Extract trailing number from each account name, find range boundaries
+    const trailingNum = (s) => { const m = s.match(/(\d+)$/); return m ? parseInt(m[1], 10) : null; };
+    const prefixOf = (s) => { const m = s.match(/^(.*?)(\d+)$/); return m ? m[1] : null; };
 
-    const filtered = accounts.filter((acc) => {
-      if (!acc.profileName) return false;
-      const m = acc.profileName.match(/^([A-Za-z]*)(\d+)$/);
-      if (!m || m[1] !== prefix) return false;
-      const num = parseInt(m[2], 10);
-      return num >= start && num <= end;
-    });
+    // Find the midpoint: try splitting rangeStr where the second prefix starts
+    // e.g. "P-20260329-0001-P-20260329-0020" → find second "P-20260329-"
+    const firstNum = trailingNum(rangeStr.split('-').slice(0, -1).join('-'))
+      || trailingNum(parts.slice(0, Math.ceil(parts.length / 2)).join('-'));
 
-    this.log.info(`Filtered ${filtered.length}/${accounts.length} accounts for range: ${rangeStr}`);
-    return filtered;
+    // Try to find prefix by matching against existing account names
+    const sampleAccount = accounts.find(a => a.profileName && rangeStr.startsWith(prefixOf(a.profileName) || '###'));
+    if (sampleAccount) {
+      const prefix = prefixOf(sampleAccount.profileName);
+      // Extract start and end numbers from rangeStr
+      const rangeNums = rangeStr.match(new RegExp(`^${prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(\\d+).*${prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(\\d+)$`));
+      if (rangeNums) {
+        const start = parseInt(rangeNums[1], 10);
+        const end = parseInt(rangeNums[2], 10);
+        const filtered = accounts.filter((acc) => {
+          if (!acc.profileName) return false;
+          if (prefixOf(acc.profileName) !== prefix) return false;
+          const num = trailingNum(acc.profileName);
+          return num !== null && num >= start && num <= end;
+        });
+        this.log.info(`Filtered ${filtered.length}/${accounts.length} accounts for range: ${rangeStr}`);
+        return filtered;
+      }
+    }
+
+    this.log.error(`Invalid range format: ${rangeStr}. Expected: A0001-A0020 or P-20260329-0001-P-20260329-0020`);
+    return accounts;
   }
 
   filterResume(accounts, taskName) {
