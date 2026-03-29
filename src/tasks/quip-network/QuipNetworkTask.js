@@ -49,6 +49,10 @@ export default class QuipNetworkTask extends BaseTask {
     await driver.get(WEBSITE_URL);
     await sleep(5000);
 
+    // Update mainHandle to the Quip tab (unlock may have changed active tab)
+    wallet.mainHandle = await driver.getWindowHandle();
+    logger.info(`Main handle set to Quip tab: ${wallet.mainHandle.substring(0, 8)}`);
+
     // Step 3: Check if wallet already connected
     const needsConnect = await this._hasConnectButton(driver);
 
@@ -58,7 +62,12 @@ export default class QuipNetworkTask extends BaseTask {
       logger.info('Wallet already connected — skipping wallet connect');
     }
 
-    // Step 4: Connect X (Twitter)
+    // Step 4: Reload to ensure Connect X button is visible
+    logger.info('Reloading page before Connect X...');
+    await driver.get(WEBSITE_URL);
+    await sleep(5000);
+
+    // Step 5: Connect X (Twitter)
     await this._connectX(driver, logger);
 
     // Step 5: Verify final state
@@ -117,22 +126,46 @@ export default class QuipNetworkTask extends BaseTask {
       // Handle wallet connect popup (1st popup)
       await this._handleWalletPopup(driver, logger, wallet, 'connect');
 
-      // Wait for possible sign message popup (2nd popup)
+      // Switch back to main and click "Log In" button
+      await wallet.switchToMain();
+      await sleep(3000);
+      logger.info('Clicking Log In button...');
+      const logInClicked = await driver.executeScript(`
+        const btns = document.querySelectorAll('button');
+        for (const btn of btns) {
+          if (btn.textContent.trim() === 'Log In') { btn.click(); return true; }
+        }
+        return false;
+      `);
+      if (logInClicked) {
+        logger.info('Clicked Log In');
+      } else {
+        logger.warn('Log In button not found');
+      }
       await sleep(5000);
-      await this._handleWalletPopup(driver, logger, wallet, 'sign');
+
+      // Handle sign message popup (2nd popup — needs 2 confirms)
+      await this._handleWalletPopup(driver, logger, wallet, 'sign-1');
+      await sleep(3000);
+      await this._handleWalletPopup(driver, logger, wallet, 'sign-2');
+
+      // // Reload after confirming OKX popup
+      // logger.info('Reloading page after OKX confirm...');
+      // await driver.navigate().refresh();
+      // await sleep(5000);
     } else {
       logger.warn(`${walletType} button not found in modal`);
     }
 
-    // Verify
-    await driver.navigate().refresh();
-    await sleep(5000);
-    const connected = !(await this._hasConnectButton(driver));
-    if (connected) {
-      logger.info('Wallet connected!');
-    } else {
-      logger.warn('Wallet connect may have failed');
-    }
+    // // Verify
+    // await driver.navigate().refresh();
+    // await sleep(5000);
+    // const connected = !(await this._hasConnectButton(driver));
+    // if (connected) {
+    //   logger.info('Wallet connected!');
+    // } else {
+    //   logger.warn('Wallet connect may have failed');
+    // }
   }
 
   // ==================== Connect X (Twitter) ====================

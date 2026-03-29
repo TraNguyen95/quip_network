@@ -1,0 +1,72 @@
+QuipNetworkTask - All Steps
+===========================
+
+STEP 1: Unlock OKX Wallet
+  - Switch to page tab (not background page)
+  - Navigate to chrome-extension://{extensionId}/fullscreen.html#/unlock
+  - Enter password
+  - Click "Unlock" button
+  - Wait 5s
+
+STEP 2: Navigate to Quip
+  - Go to https://quest.quip.network/airdrop
+  - Wait 5s
+  - Update mainHandle to current Quip tab
+
+STEP 3: Check wallet connected
+  - Find "Connect Wallet" / "Connect" button on page
+  - If not found -> wallet already connected, skip to STEP 8
+
+STEP 4: Click "Connect Wallet"
+  - Click "Connect Wallet" or "Connect" button via JS
+  - Wait 3s
+
+STEP 5: Click "Connect with Ethereum"
+  - Find button by data-testid="ConnectButton" or text "Connect with Ethereum"
+  - Click via JS
+  - Wait 3s
+
+STEP 6: Select OKX in wallet modal
+  - Dynamic.xyz modal renders wallet list in Shadow DOM
+  - Find button containing "OKX" text in Shadow DOM
+  - Click
+  - Wait 5s
+
+STEP 7: Handle OKX connect popup (1st popup)
+  - Detect OKX popup window (URL contains extensionId, not background)
+  - Switch to popup
+  - Click "Connect" / "Confirm" / "Approve" button
+  - Switch back to main
+
+STEP 8: Click "Log In" button
+  - Switch to main page
+  - Find button with text "Log In"
+  - Click
+  - Wait 5s
+
+STEP 9: Handle OKX sign popup (2nd popup - needs 2 confirms)
+  - sign-1: Detect OKX popup, click Confirm, switch back to main
+  - Wait 3s
+  - sign-2: Detect OKX popup again, click Confirm, switch back to main
+
+STEP 10: Reload page before Connect X
+  - Navigate to https://quest.quip.network/airdrop
+  - Wait 5s
+
+STEP 11: Connect X (Twitter)
+  - Find "Connect X" button
+  - Click via JS
+  - Wait 5s
+
+STEP 12: Authorize X
+  - Check if redirected to x.com/i/oauth2/authorize
+  - Find "Authorize app" button
+  - Click via JS
+  - Wait 8s
+  - Check if redirected back to quip.network
+
+STEP 13: Verify final state
+  - Refresh page
+  - Check walletConnected (no "Connect Wallet" button)
+  - Check xConnected (no "Connect X" button)
+  - Return result

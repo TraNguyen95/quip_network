@@ -41,6 +41,7 @@ export default class GpmClient {
     return {
       driverPath: data.data.driver_path,
       remoteAddress: data.data.remote_debugging_address,
+      processId: data.data.process_id,
       profileId,
     };
   }

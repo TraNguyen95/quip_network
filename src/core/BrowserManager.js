@@ -39,7 +39,20 @@ export default class BrowserManager {
 
     // Start GPM profile
     const result = await this.gpm.startProfile(profileId, { width, height, x, y });
-    const { driverPath, remoteAddress } = result;
+    const { driverPath, remoteAddress, processId } = result;
+
+    // Bring browser window to foreground
+    if (processId) {
+      try {
+        const { exec } = await import('child_process');
+        const ps = `
+          Add-Type -Name Win -Namespace Native -MemberDefinition '[DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow); [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);';
+          $p = Get-Process -Id ${processId} -ErrorAction SilentlyContinue;
+          if ($p) { $h = $p.MainWindowHandle; [Native.Win]::ShowWindow($h, 9); [Native.Win]::SetForegroundWindow($h) }
+        `.replace(/\n/g, ' ');
+        exec(`powershell -Command "${ps}"`, () => {});
+      } catch {}
+    }
 
     // Create and connect browser driver
     const browserDriver = this.createDriver();

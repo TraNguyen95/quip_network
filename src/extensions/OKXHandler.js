@@ -33,16 +33,17 @@ export default class OKXHandler extends BaseWalletHandler {
 
     const unlockUrl = `chrome-extension://${this.extensionId}/fullscreen.html#/unlock`;
     this.log.info(`OKX unlock URL: ${unlockUrl}`);
-    await this.driver.get(unlockUrl);
-    await sleep(5000);
 
-    // Debug screenshot
-    try {
-      const { writeFileSync } = await import('fs');
-      const img = await this.driver.takeScreenshot();
-      writeFileSync('logs/screenshots/okx_unlock_page.png', img, 'base64');
-      this.log.info('OKX unlock page screenshot saved');
-    } catch {}
+    // Navigate with retry — extension may not be ready yet
+    for (let attempt = 0; attempt < 3; attempt++) {
+      await this.driver.get(unlockUrl);
+      await sleep(5000);
+      const currentUrl = await this.driver.getCurrentUrl();
+      this.log.info(`After navigate: ${currentUrl}`);
+      if (currentUrl.includes(this.extensionId)) break;
+      this.log.warn(`Navigate failed (attempt ${attempt + 1}), retrying...`);
+      await sleep(3000);
+    }
 
     const passwordInput = await this._waitForElement(LOCATORS.passwordInput);
     await passwordInput.sendKeys(password);
@@ -68,12 +69,31 @@ export default class OKXHandler extends BaseWalletHandler {
       handlesBefore = await this.driver.getAllWindowHandles();
     }
 
-    const popupHandle = await this.waitAndSwitchToPopup(handlesBefore);
+    // Find OKX popup by URL instead of relying on handle order
+    await sleep(3000);
+    const allHandles = await this.driver.getAllWindowHandles();
+    let popupHandle = null;
+
+    for (const h of allHandles) {
+      await this.driver.switchTo().window(h);
+      const url = await this.driver.getCurrentUrl();
+      // OKX popup contains extension ID and is not background page
+      if (url.includes(this.extensionId) && !url.includes('background')) {
+        // Skip if this is the fullscreen wallet page we navigated to earlier
+        if (url.includes('#/unlock') || url === `chrome-extension://${this.extensionId}/fullscreen.html#/`) continue;
+        popupHandle = h;
+        this.log.info(`Found OKX popup: ${url}`);
+        break;
+      }
+    }
+
     if (!popupHandle) {
       this.log.warn('OKX Wallet popup not found');
+      await this.switchToMain();
       return false;
     }
 
+    await this.driver.switchTo().window(popupHandle);
     this.log.info('Switched to OKX Wallet popup');
     await sleep(3000);
 
@@ -111,19 +131,31 @@ export default class OKXHandler extends BaseWalletHandler {
 
   async _switchToPageTab() {
     const handles = await this.driver.getAllWindowHandles();
+    this.log.info(`Window handles: ${handles.length}`);
+
+    // Log all handles first
+    const handleUrls = [];
     for (const h of handles) {
       await this.driver.switchTo().window(h);
       const url = await this.driver.getCurrentUrl();
-      if (!url.startsWith('chrome-extension://') || url.includes('fullscreen.html') || url.includes('popup.html') || url.includes('home.html')) {
-        if (!url.includes('background.html')) {
-          return;
-        }
-      }
+      this.log.info(`  Handle ${h.substring(0, 8)}: ${url}`);
+      handleUrls.push({ handle: h, url });
     }
-    // Fallback: use first handle
-    if (handles.length > 0) {
-      await this.driver.switchTo().window(handles[0]);
+
+    // Pick a real page tab (not extension, not about:blank)
+    const pageTab = handleUrls.find(h =>
+      !h.url.includes('chrome-extension://') &&
+      !h.url.startsWith('about:blank')
+    );
+    if (pageTab) {
+      await this.driver.switchTo().window(pageTab.handle);
+      this.log.info(`Switched to: ${pageTab.url}`);
+      return;
     }
+
+    // No real page tab found — create a new tab
+    this.log.info('No suitable tab found, creating new tab');
+    await this.driver.switchTo().newWindow('tab');
   }
 
   async _waitForElement(locator, timeout = TIMEOUTS.default) {
