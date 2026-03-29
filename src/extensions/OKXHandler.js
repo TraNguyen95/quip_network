@@ -46,7 +46,13 @@ export default class OKXHandler extends BaseWalletHandler {
     }
 
     const passwordInput = await this._waitForElement(LOCATORS.passwordInput);
-    await passwordInput.sendKeys(password);
+    await this.driver.executeScript(`
+      const el = arguments[0];
+      el.focus();
+      el.value = arguments[1];
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+    `, passwordInput, password);
     await sleep(1000);
 
     // Wait for Unlock button to become enabled after password input

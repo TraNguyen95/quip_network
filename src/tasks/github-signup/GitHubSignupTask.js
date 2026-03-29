@@ -50,22 +50,19 @@ export default class GitHubSignupTask extends BaseTask {
     // Step 2: Fill email
     logger.info(`Entering email: ${email}`);
     const emailInput = await this._waitForEl(driver, By.id('email'));
-    await emailInput.clear();
-    await humanType(emailInput, email);
+    await this._setInputValue(driver, emailInput, email);
     await sleep(1000);
 
     // Step 3: Fill password
     logger.info('Entering password...');
     const passwordInput = await this._waitForEl(driver, By.id('password'));
-    await passwordInput.clear();
-    await humanType(passwordInput, password);
+    await this._setInputValue(driver, passwordInput, password);
     await sleep(1000);
 
     // Step 4: Fill username
     logger.info(`Entering username: ${username}`);
     const usernameInput = await this._waitForEl(driver, By.id('login'));
-    await usernameInput.clear();
-    await humanType(usernameInput, username);
+    await this._setInputValue(driver, usernameInput, username);
     await sleep(2000);
 
     // Step 5: Click "Create account" (NOT "Continue with Google")
@@ -298,13 +295,11 @@ export default class GitHubSignupTask extends BaseTask {
     try {
       // Clear auto-filled values with Ctrl+A then type over
       const loginField = await this._waitForEl(driver, By.id('login_field'), 10000);
-      await driver.executeScript('arguments[0].select(); arguments[0].value = "";', loginField);
-      await humanType(loginField, email);
+      await this._setInputValue(driver, loginField, email);
       await sleep(500);
 
       const passField = await this._waitForEl(driver, By.id('password'), 5000);
-      await driver.executeScript('arguments[0].select(); arguments[0].value = "";', passField);
-      await humanType(passField, password);
+      await this._setInputValue(driver, passField, password);
       await sleep(500);
 
       // Click Sign in
@@ -357,5 +352,16 @@ export default class GitHubSignupTask extends BaseTask {
     const el = await driver.wait(until.elementLocated(locator), timeout);
     await driver.wait(until.elementIsVisible(el), timeout);
     return el;
+  }
+
+  async _setInputValue(driver, element, value) {
+    await driver.executeScript(`
+      const el = arguments[0];
+      el.focus();
+      el.value = '';
+      el.value = arguments[1];
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+    `, element, value);
   }
 }
