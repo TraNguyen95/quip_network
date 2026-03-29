@@ -15,13 +15,45 @@
 
 ## Cấu hình file .env
 
-Copy file `.env.sample` thành `.env`, sau đó sửa:
+Copy file `.env.sample` thành `.env`, sau đó sửa theo nhu cầu:
 
-```
+```env
+# Referral link cho task quip-network
 QUIP_REFERRAL_URL=https://quest.quip.network/airdrop?referral_code=YOUR_CODE
+
+# Kích thước cửa sổ mỗi profile (pixel)
+WINDOW_WIDTH=960
+WINDOW_HEIGHT=700
+
+# Số lần retry khi profile chạy fail (0 = không retry)
+RETRY_ON_FAIL=1
+
+# Tỉ lệ zoom browser (100 = bình thường, 30 = thu nhỏ 30%)
+BROWSER_ZOOM=100
 ```
 
-Thay `YOUR_CODE` bằng referral code của bạn.
+### Giải thích từng biến:
+
+| Biến | Mô tả | Ví dụ |
+|------|-------|-------|
+| `QUIP_REFERRAL_URL` | Link referral cho task quip-network. Thay `YOUR_CODE` bằng code của bạn | `...?referral_code=4QPPZ95H` |
+| `WINDOW_WIDTH` | Chiều rộng cửa sổ browser (pixel). Giảm xuống khi chạy nhiều profile đồng thời | `960` (vừa 2 cột trên màn 1920px) |
+| `WINDOW_HEIGHT` | Chiều cao cửa sổ browser (pixel) | `700` |
+| `RETRY_ON_FAIL` | Số lần retry khi profile fail. `0` = không retry, `2` = retry tối đa 2 lần | `1` |
+| `BROWSER_ZOOM` | Tỉ lệ zoom của browser. `100` = kích thước gốc, `30` = thu nhỏ còn 30% | `100` |
+
+### Gợi ý kích thước cửa sổ theo số profile đồng thời:
+
+Kích thước màn hình được **tự động detect**, không cần config. Bạn chỉ cần set kích thước mỗi cửa sổ.
+
+| Concurrent (-c) | WINDOW_WIDTH | WINDOW_HEIGHT | Ghi chú |
+|----------------|-------------|--------------|---------|
+| 1 | 1280 | 900 | Full, dễ nhìn |
+| 2 | 960 | 700 | 2 cửa sổ cạnh nhau |
+| 3 | 640 | 700 | 3 cửa sổ trên 1 hàng (màn 1920px) |
+| 4+ | 640 | 540 | Grid 2 hàng |
+
+**Lưu ý:** Nếu cửa sổ bị đè lên nhau, một số trang web (vd: GitHub) sẽ không validate được form. Hãy giảm `WINDOW_WIDTH` hoặc giảm `-c` để các cửa sổ không chồng nhau.
 
 ---
 
