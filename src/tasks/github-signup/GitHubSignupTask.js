@@ -36,7 +36,9 @@ export default class GitHubSignupTask extends BaseTask {
       return { success: false, error: 'Missing email or pass in Excel' };
     }
 
-    const username = email.split('@')[0].replace(/[^a-zA-Z0-9-]/g, '');
+    const base = email.split('@')[0].replace(/[^a-zA-Z0-9-]/g, '');
+    const rand = Math.floor(1000 + Math.random() * 9000);
+    const username = `${base}${rand}`;
     const gemmmo = new GemmmoEmailService();
 
     // Step 1: Switch to a real page tab (not extension background)
@@ -92,7 +94,52 @@ export default class GitHubSignupTask extends BaseTask {
       return { success: false, error: '"Create account" button not found' };
     }
     logger.info('Clicked "Create account"');
-    await sleep(5000);
+    await sleep(3000);
+
+    // Check if "select your country" error appears — re-select country and click again
+    const hasCountryError = await driver.executeScript(`
+      const text = document.body?.innerText || '';
+      return text.includes('Select your country') || text.includes('select your country');
+    `);
+    if (hasCountryError) {
+      logger.info('Country selection required — re-selecting country...');
+      // Click the select to open it, pick current value or Vietnam
+      const countrySelect = await this._findOptional(driver,
+        By.css('select[autocomplete="country"], select[name="user_country"]'), 3000);
+      if (countrySelect) {
+        // Get current value, fallback to VN
+        const currentVal = await countrySelect.getAttribute('value');
+        const targetVal = currentVal || 'VN';
+        // Use Selenium click + selectByValue to trigger proper events
+        await countrySelect.click();
+        await sleep(500);
+        await driver.executeScript(`
+          const sel = arguments[0];
+          const val = arguments[1];
+          // Re-select the same option to trigger validation
+          for (const opt of sel.options) {
+            if (opt.value === val) { opt.selected = true; break; }
+          }
+          sel.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+          sel.dispatchEvent(new Event('change', { bubbles: true }));
+          sel.dispatchEvent(new Event('blur', { bubbles: true }));
+        `, countrySelect, targetVal);
+        logger.info(`Re-selected country: ${targetVal}`);
+        await sleep(1000);
+      }
+      logger.info('Clicking "Create account" again...');
+      await driver.executeScript(`
+        const btns = document.querySelectorAll('button');
+        for (const btn of btns) {
+          if (btn.textContent.trim().includes('Create account') && btn.offsetParent !== null) {
+            btn.click(); return;
+          }
+        }
+      `);
+      await sleep(5000);
+    } else {
+      await sleep(2000);
+    }
 
     // Step 6: Handle captcha — wait for it to be solved (manual or auto)
     logger.info('Waiting for captcha/verification step...');
@@ -352,6 +399,11 @@ export default class GitHubSignupTask extends BaseTask {
     const el = await driver.wait(until.elementLocated(locator), timeout);
     await driver.wait(until.elementIsVisible(el), timeout);
     return el;
+  }
+
+  async _findOptional(driver, locator, timeout = 3000) {
+    try { return await this._waitForEl(driver, locator, timeout); }
+    catch { return null; }
   }
 
   async _setInputValue(driver, element, value) {

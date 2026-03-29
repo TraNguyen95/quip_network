@@ -43,12 +43,33 @@ if (opts.task) overrides.execution = { ...overrides.execution, task: opts.task }
 if (opts.concurrent) overrides.execution = { ...overrides.execution, maxConcurrent: opts.concurrent };
 if (opts.driver) overrides.execution = { ...overrides.execution, driver: opts.driver };
 
+// Auto-detect screen resolution on Windows
+try {
+  const { execSync } = await import('child_process');
+  const output = execSync('powershell -Command "Add-Type -AssemblyName System.Windows.Forms; $s = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds; Write-Output \\"$($s.Width)x$($s.Height)\\""', { encoding: 'utf-8', timeout: 5000 }).trim();
+  const [w, h] = output.split('x').map(Number);
+  if (w && h) {
+    overrides.window = { ...overrides.window, screenWidth: w, screenHeight: h };
+  }
+} catch {}
+
+// Window size from .env
+if (process.env.WINDOW_WIDTH) overrides.window = { ...overrides.window, width: parseInt(process.env.WINDOW_WIDTH) };
+if (process.env.WINDOW_HEIGHT) overrides.window = { ...overrides.window, height: parseInt(process.env.WINDOW_HEIGHT) };
+
+// Retry from .env
+if (process.env.RETRY_ON_FAIL) overrides.execution = { ...overrides.execution, retryOnFail: parseInt(process.env.RETRY_ON_FAIL) };
+
+// Browser zoom from .env (e.g. 30 = 30%)
+if (process.env.BROWSER_ZOOM) overrides.window = { ...overrides.window, zoom: parseInt(process.env.BROWSER_ZOOM) };
+
 const config = loadConfig(overrides);
 const log = initLogger(config);
 
 async function main() {
   log.info('=== GPM Automation Tool ===');
   log.info(`Task: ${config.execution.task} | Driver: ${config.execution.driver} | Concurrent: ${config.execution.maxConcurrent}`);
+  log.info(`Screen: ${config.window.screenWidth}x${config.window.screenHeight}`);
 
   const dataStore = new DataStore(config);
   const gpm = new GpmClient(config);
