@@ -18,12 +18,24 @@ export default class GpmClient {
 
   // ==================== V3 API ====================
 
-  async getProfilesV3({ groupId, page = 1, perPage = 100 } = {}) {
+  async getProfilesV3({ groupId, perPage = 100 } = {}) {
     const gid = groupId || this.groupId;
-    const { data } = await this.client.get('/api/v3/profiles', {
-      params: { group_id: gid, page, per_page: perPage, sort: 2 },
-    });
-    return data.data || [];
+    let allProfiles = [];
+    let page = 1;
+
+    while (true) {
+      const { data } = await this.client.get('/api/v3/profiles', {
+        params: { group_id: gid, page, per_page: perPage, sort: 2 },
+      });
+      const profiles = data.data || [];
+      allProfiles.push(...profiles);
+
+      const totalPages = data.pagination?.total_page || 1;
+      if (page >= totalPages) break;
+      page++;
+    }
+
+    return allProfiles;
   }
 
   async startProfileV3(profileId, { width, height, x, y } = {}) {
