@@ -37,8 +37,10 @@ export default class BrowserManager {
     const { width, height } = this.windowManager.getWindowSize();
     const { x, y } = this.windowManager.getPosition(index);
 
-    // Start GPM profile
-    const zoom = this.config.window.zoom || 100;
+    // Use config zoom override (from .env) or auto-calculated zoom to fit grid
+    const zoom = this.config.window.zoom
+      ? this.config.window.zoom / 100
+      : this.windowManager.getZoom();
     const result = await this.gpm.startProfile(profileId, { width, height, x, y, zoom });
     const { driverPath, remoteAddress, processId } = result;
 

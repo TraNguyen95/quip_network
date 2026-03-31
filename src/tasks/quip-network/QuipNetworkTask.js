@@ -65,33 +65,27 @@ export default class QuipNetworkTask extends BaseTask {
       logger.info('Wallet already connected — skipping wallet connect');
     }
 
-    // Step 4: Reload to ensure buttons are visible
-    logger.info('Reloading page...');
-    await driver.get(getWebsiteUrl());
-    await sleep(5000);
-
     // Check if "Go to Account" already visible → X already connected, skip Connect X
     const alreadyConnectedX = await this._findOptional(driver, LOCATORS.goToAccountLink, 3000);
     if (alreadyConnectedX) {
       logger.info('Go to Account found — X already connected, skipping Connect X');
     } else {
-      // Step 5: Connect X (Twitter)
+      // Step 4: Connect X (Twitter)
       await this._connectX(driver, logger);
-
-      // Reload after Connect X
-      await driver.get(getWebsiteUrl());
-      await sleep(5000);
     }
 
     // Step 6: Follow X account + Claim
     const claimed = await this._followAndClaim(driver, logger);
 
+    // Step 7: Check in
+    const checkedIn = await this._checkin(driver, logger);
+
     const pageSource = await driver.getPageSource();
     const walletConnected = !pageSource.includes('>Connect Wallet<') && !pageSource.includes('>Connect<');
     const xConnected = !pageSource.includes('Connect X');
 
-    logger.info(`Result: wallet=${walletConnected}, x=${xConnected}, claimed=${claimed}`);
-    return { success: claimed, data: { walletConnected, xConnected, claimed } };
+    logger.info(`Result: wallet=${walletConnected}, x=${xConnected}, claimed=${claimed}, checkedIn=${checkedIn}`);
+    return { success: claimed || checkedIn, data: { walletConnected, xConnected, claimed, checkedIn } };
   }
 
   // ==================== Connect Wallet ====================
@@ -302,6 +296,29 @@ export default class QuipNetworkTask extends BaseTask {
       logger.warn('Claim button not found');
       return false;
     }
+  }
+
+  // ==================== Check In ====================
+
+  async _checkin(driver, logger) {
+    logger.info('Looking for Check in button...');
+    const checkInBtn = await this._findOptional(driver, By.xpath("//*[text()='Check in']"), 10000);
+    if (!checkInBtn) {
+      logger.info('Check in button not found — may have already checked in today');
+      return false;
+    }
+
+    await driver.executeScript('arguments[0].click();', checkInBtn);
+    logger.info('Clicked Check in, waiting for result...');
+
+    const success = await this._findOptional(driver, By.xpath("//*[text()='Check-In Succeeded!']"), 15000);
+    if (success) {
+      logger.info('Check-In Succeeded!');
+      return true;
+    }
+
+    logger.warn('Check-In Succeeded! message not found');
+    return false;
   }
 
   // ==================== Helpers ====================

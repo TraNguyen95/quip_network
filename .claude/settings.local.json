@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node --input-type=module -e \":*)",
+      "Bash(node index.js --task github-signup --profiles A0004 --group quip -c 1)"
+    ]
+  },
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [
+    "playwright"
+  ]
+}

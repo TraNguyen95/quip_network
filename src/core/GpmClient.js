@@ -42,8 +42,7 @@ export default class GpmClient {
     const params = {};
     if (width && height) params.win_size = `${width},${height}`;
     if (x !== undefined && y !== undefined) params.win_pos = `${x},${y}`;
-    params.win_scale = zoom ? zoom / 100 : 1;
-
+    if (zoom && zoom < 1) params.win_scale = zoom;
     const { data } = await this.client.get(`/api/v3/profiles/start/${profileId}`, { params });
 
     if (!data.data) {
