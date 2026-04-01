@@ -1,6 +1,7 @@
 import { By, until } from 'selenium-webdriver';
 import BaseTask from '../BaseTask.js';
 import GemmmoEmailService from '../../services/GemmmoEmailService.js';
+import DataStore from '../../services/DataStore.js';
 import { sleep } from '../../utils/humanBehavior.js';
 
 const SIGNUP_URL = 'https://github.com/signup';
@@ -189,6 +190,10 @@ export default class GitHubSignupTask extends BaseTask {
     } else {
       logger.warn('Signup done but login may not have completed');
     }
+
+    // Write "ok" to column I (github) in Excel
+    const dataStore = new DataStore(config);
+    dataStore.updateCell(account.profileName, 'github', 'ok');
 
     return { success: true, data: { email, username, loggedIn, url: finalUrl } };
   }

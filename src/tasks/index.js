@@ -3,6 +3,8 @@ import IncentivTask from './incentiv/IncentivTask.js';
 import GoogleSearchTask from './google-search/GoogleSearchTask.js';
 import ChainlinkFaucetTask from './chainlink-faucet/ChainlinkFaucetTask.js';
 import QuipNetworkTask from './quip-network/QuipNetworkTask.js';
+import QuipRefTask from './quip-network/QuipRefTask.js';
+import QuipPostTask from './quip-network/QuipPostTask.js';
 import GitHubSignupTask from './github-signup/GitHubSignupTask.js';
 
 /**
@@ -21,6 +23,8 @@ register(IncentivTask);
 register(GoogleSearchTask);
 register(ChainlinkFaucetTask);
 register(QuipNetworkTask);
+register(QuipRefTask);
+register(QuipPostTask);
 register(GitHubSignupTask);
 
 // ==================== Public API ====================

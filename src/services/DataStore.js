@@ -137,6 +137,47 @@ export default class DataStore {
     return filtered;
   }
 
+  // ==================== Excel Writing ====================
+
+  updateCell(profileName, columnHeader, value) {
+    const workbook = XLSX.readFile(this.accountsFile);
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    const range = XLSX.utils.decode_range(sheet['!ref']);
+
+    // Find column by header name, or create it
+    let targetCol = -1;
+    for (let c = 0; c <= range.e.c; c++) {
+      const cell = sheet[XLSX.utils.encode_cell({ r: 0, c })];
+      if (cell && cell.v === columnHeader) { targetCol = c; break; }
+    }
+    if (targetCol === -1) {
+      targetCol = range.e.c + 1;
+      sheet[XLSX.utils.encode_cell({ r: 0, c: targetCol })] = { t: 's', v: columnHeader };
+      range.e.c = targetCol;
+      sheet['!ref'] = XLSX.utils.encode_range(range);
+    }
+
+    // Find row by profileName (column C = index 2 by default)
+    let profileCol = 2;
+    for (let c = 0; c <= range.e.c; c++) {
+      const cell = sheet[XLSX.utils.encode_cell({ r: 0, c })];
+      if (cell && cell.v === 'profileName') { profileCol = c; break; }
+    }
+
+    for (let r = 1; r <= range.e.r; r++) {
+      const cell = sheet[XLSX.utils.encode_cell({ r, c: profileCol })];
+      if (cell && String(cell.v).trim() === String(profileName).trim()) {
+        sheet[XLSX.utils.encode_cell({ r, c: targetCol })] = { t: 's', v: value };
+        XLSX.writeFile(workbook, this.accountsFile);
+        this.log.info(`Updated Excel: ${profileName} → ${columnHeader} = ${value}`);
+        return true;
+      }
+    }
+
+    this.log.warn(`Profile ${profileName} not found in Excel`);
+    return false;
+  }
+
   // ==================== Results ====================
 
   saveResults(taskName, results) {

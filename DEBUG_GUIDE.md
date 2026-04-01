@@ -114,6 +114,32 @@ chrome-extension://{extensionId}/home.html#onboarding/unlock
 - **Không navigate được `chrome-extension://`** URL → không inspect MetaMask trực tiếp.
 - Snapshot trang lớn có thể vượt token limit → dùng `Grep` hoặc `node -e` để filter nội dung.
 - Mỗi lần đổi `.mcp.json` cần restart Claude Code.
+- **Playwright MCP thường fail khi connect CDP** — package `@anthropic-ai/mcp-playwright` hoặc `@playwright/mcp` không ổn định với GPM browser (Chrome 129). Sau restart Claude Code, MCP có thể không load (không xuất hiện trong deferred tools).
+
+### Thay thế: Debug bằng Selenium trực tiếp (khuyên dùng)
+Khi Playwright MCP không hoạt động, dùng Selenium connect vào GPM browser qua CDP để debug:
+```javascript
+// node --input-type=module -e "..."
+import { Builder } from 'selenium-webdriver';
+import chrome from 'selenium-webdriver/chrome.js';
+
+const driverPath = String.raw`C:\Users\Admin\AppData\Local\Programs\GPMLogin\gpm_browser\gpm_browser_chromium_core_129\gpmdriver.exe`;
+const service = new chrome.ServiceBuilder(driverPath);
+const opts = new chrome.Options();
+opts.debuggerAddress('127.0.0.1:{PORT}');  // từ GPM API start response
+const driver = await new Builder().forBrowser('chrome').setChromeService(service).setChromeOptions(opts).build();
+
+// Debug commands
+await driver.get('https://example.com');
+const text = await driver.executeScript('return document.body.innerText.substring(0, 500)');
+console.log(text);
+```
+
+**Lưu ý quan trọng**:
+- **Phải dùng `gpmdriver.exe`** (GPM bundled driver), KHÔNG dùng system chromedriver (version mismatch: system = Chrome 146, GPM = Chrome 129).
+- Dùng `String.raw` cho Windows path để tránh escape issues.
+- Regex trong `executeScript` có thể gây lỗi `Invalid regular expression` trên Chrome 129 — tránh dùng regex, dùng `indexOf`/`split` thay thế.
+- Không gọi `driver.quit()` nếu muốn giữ browser mở để debug tiếp.
 
 ---
 
@@ -166,7 +192,104 @@ chrome-extension://{extensionId}/home.html#onboarding/unlock
 
 ---
 
-## 8. Lỗi hay gặp — Quick Reference
+## 8. React Input — setValue không hoạt động
+
+### Vấn đề
+Dùng `executeScript` để set `input.value` + dispatch `input`/`change` event → React state không cập nhật → form submit gửi giá trị rỗng.
+
+Cả `nativeInputValueSetter` pattern cũng không hoạt động:
+```javascript
+// ❌ KHÔNG HOẠT ĐỘNG với React
+const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+setter.call(input, value);
+input.dispatchEvent(new Event('input', { bubbles: true }));
+```
+
+### Fix
+Dùng `sendKeys()` — Selenium gõ từng ký tự như người dùng thật, React nhận event đúng:
+```javascript
+// ✅ HOẠT ĐỘNG
+await input.click();
+await input.clear();
+await input.sendKeys(value);
+```
+
+**Lưu ý**: `sendKeys` chỉ hoạt động khi element visible + interactable. Nếu bị lỗi `invalid element state`, thêm `scrollIntoView` trước:
+```javascript
+await driver.executeScript('arguments[0].scrollIntoView({block:"center"});', input);
+```
+
+### Ngoại lệ: contenteditable div (X/Twitter compose)
+X dùng `contenteditable` div, `sendKeys` không hoạt động. Dùng `execCommand`:
+```javascript
+el.focus();
+document.execCommand('insertText', false, text);
+```
+
+---
+
+## 9. OKX Wallet — Unlock fail do setValue
+
+### Vấn đề
+Dùng `el.value = password` trên OKX password input → OKX app không nhận → nút Unlock vẫn disabled.
+
+### Fix
+Dùng `sendKeys()` thay vì set `el.value`:
+```javascript
+await passwordInput.clear();
+await passwordInput.sendKeys(password);
+```
+
+---
+
+## 10. Quip Network — Nhiều nút cùng tên
+
+### Vấn đề
+Quip có nhiều quest với cùng nút "Submit Post". Dùng `By.xpath("//button[contains(.,'Submit Post')]")` sẽ click nút đầu tiên (sai quest).
+
+### Fix
+Tìm nút trong context quest đúng bằng JS:
+```javascript
+var btns = document.querySelectorAll('button');
+for (var btn of btns) {
+  if (btn.textContent.includes('Submit Post')) {
+    var card = btn.parentElement.parentElement.parentElement;
+    if (card && card.innerText.indexOf('Post about Quip') !== -1) {
+      btn.click(); // Đúng quest
+    }
+  }
+}
+```
+
+### Debug tip
+List tất cả buttons cùng tên + context xung quanh để xác định đúng nút:
+```javascript
+var btns = document.querySelectorAll('button');
+for (var b of btns) {
+  if (b.textContent.includes('Submit Post')) {
+    console.log(b.parentElement.parentElement.parentElement.innerText.substring(0, 200));
+  }
+}
+```
+
+---
+
+## 11. Window Size & Zoom
+
+### Vấn đề
+`WindowManager` tự chia `screenWidth/screenHeight` cho grid concurrent → window size thực tế rất nhỏ → element không visible → click/interact fail.
+
+### Fix (hiện tại)
+`WindowManager` giữ nguyên `window.width/height` từ config, tính `zoom = cellSize / windowSize` để GPM scale browser fit vào grid. Browser "thấy" full resolution nhưng hiển thị nhỏ trên màn hình.
+
+### Lưu ý
+- `.env` `WINDOW_WIDTH/HEIGHT` override `config.json`
+- `BROWSER_ZOOM` trong `.env` override auto-calc zoom
+- GPM param: `win_scale` (decimal, e.g. 0.44) khác `zoom` (percentage)
+
+---
+
+## 12. Lỗi hay gặp — Quick Reference
 
 | Lỗi | Nguyên nhân | Fix |
 |-----|------------|-----|
@@ -180,3 +303,9 @@ chrome-extension://{extensionId}/home.html#onboarding/unlock
 | `GPM API connection refused` | GPM Login chưa mở | Mở GPM Login app |
 | `import.meta not available` | esbuild CJS mode | Dùng try/catch fallback |
 | `Windows npx MCP fail` | Thiếu `cmd /c` wrapper | Thêm `"command": "cmd", "args": ["/c", "npx", ...]` |
+| `invalid element state` | Element không interactable (zoom nhỏ) | `scrollIntoView({block:"center"})` trước khi interact |
+| React input value rỗng | `el.value = x` không trigger React | Dùng `sendKeys()` thay vì JS setValue |
+| OKX Unlock button disabled | Password set qua JS không nhận | Dùng `sendKeys()` cho password input |
+| Click nhầm button | Nhiều button cùng text trên page | Tìm button trong context parent card đúng |
+| `target window already closed` | Browser crash/X load chậm | Tăng wait, retry, hoặc check profile stability |
+| Tweet link thiếu `?s=20` | Quip reject link không có param | Append `?s=20` sau khi lấy link |

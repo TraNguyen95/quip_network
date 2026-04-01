@@ -42,18 +42,22 @@ BROWSER_ZOOM=100
 | `RETRY_ON_FAIL` | Số lần retry khi profile fail. `0` = không retry, `2` = retry tối đa 2 lần | `1` |
 | `BROWSER_ZOOM` | Tỉ lệ zoom của browser. `100` = kích thước gốc, `30` = thu nhỏ còn 30% | `100` |
 
-### Gợi ý kích thước cửa sổ theo số profile đồng thời:
+### Auto-zoom (mới)
 
-Kích thước màn hình được **tự động detect**, không cần config. Bạn chỉ cần set kích thước mỗi cửa sổ.
+Tool giờ tự động tính zoom để xếp nhiều browser trên màn hình:
+- `WINDOW_WIDTH/HEIGHT` là resolution **logic** mà browser "thấy" (khuyên dùng `1920x1080`)
+- Tool tự chia grid dựa trên `screenWidth/screenHeight` trong config.json và số concurrent
+- Browser được scale xuống (zoom) để fit vào grid cell
+- Ví dụ: 5 concurrent trên màn 2560x1440 → grid 3x2 → zoom ~44%
+
+**Không cần set `BROWSER_ZOOM`** trừ khi muốn override thủ công.
 
 | Concurrent (-c) | WINDOW_WIDTH | WINDOW_HEIGHT | Ghi chú |
 |----------------|-------------|--------------|---------|
-| 1 | 1280 | 900 | Full, dễ nhìn |
-| 2 | 960 | 700 | 2 cửa sổ cạnh nhau |
-| 3 | 640 | 700 | 3 cửa sổ trên 1 hàng (màn 1920px) |
-| 4+ | 640 | 540 | Grid 2 hàng |
+| 1-5 | 1920 | 1080 | Khuyên dùng, auto-zoom sẽ fit |
+| 1 | 1920 | 1080 | Full size, zoom = 1.0 |
 
-**Lưu ý:** Nếu cửa sổ bị đè lên nhau, một số trang web (vd: GitHub) sẽ không validate được form. Hãy giảm `WINDOW_WIDTH` hoặc giảm `-c` để các cửa sổ không chồng nhau.
+**Lưu ý:** Nếu set `BROWSER_ZOOM` trong .env, nó sẽ override auto-zoom cho tất cả profile.
 
 ---
 
@@ -109,7 +113,7 @@ Tự động connect OKX wallet + connect X (Twitter) + follow + claim trên que
 
 ### Các bước script thực hiện
 1. Mở khóa OKX Wallet (nhập password)
-2. Vào trang quest.quip.network/airdrop (có referral code từ .env)
+2. Vào trang quest.quip.network/airdrop (dùng `quip_url` từ Excel hoặc referral code từ .env)
 3. Click "Connect Wallet" -> "Connect with Ethereum" -> chọn OKX
 4. Xác nhận popup OKX (Connect + Sign)
 5. Click "Log In" -> xác nhận popup OKX (2 lần)
@@ -117,6 +121,7 @@ Tự động connect OKX wallet + connect X (Twitter) + follow + claim trên que
 7. Click "Go to Account" -> Follow @quipnetwork trên X
 8. Đóng tab X, quay về trang chính
 9. Click "Claim" -> kiểm tra "Great job!"
+10. Daily Check-in: click "Check in" -> đợi "Check-In Succeeded!"
 
 ### Lệnh chạy
 
@@ -142,6 +147,9 @@ node index.js --task quip-network --group quip --range P-20260329-0001-P-2026032
 - `--range X-Y`: chạy từ profile X đến profile Y
 - `-c 3`: số profile chạy đồng thời (1 = từng cái, 3 = chạy 3 cái 1 lúc)
 
+### Cột Excel hỗ trợ
+- **quip_url**: (tuỳ chọn) link referral riêng cho từng account. Nếu không có, dùng `QUIP_REFERRAL_URL` từ .env
+
 ### Lưu ý
 - Profile GPM phải có OKX Wallet extension đã cài sẵn
 - Tài khoản X (Twitter) phải đã đăng nhập sẵn trên profile GPM
@@ -149,7 +157,84 @@ node index.js --task quip-network --group quip --range P-20260329-0001-P-2026032
 
 ---
 
-## Task 2: github-signup
+## Task 2: quip-checkin (Daily Check-in)
+
+### Chức năng
+Tự động check-in hàng ngày trên quest.quip.network (nằm trong task quip-network, step cuối)
+
+### Lệnh chạy
+```
+node index.js --task quip-network --group quip --range P-20260329-0001-P-20260329-0020 -c 5
+```
+
+### Lưu ý
+- Wallet phải đã connect trước đó (chạy quip-network lần đầu để connect)
+- Nếu đã check-in hôm nay, nút "Check in" sẽ không xuất hiện → script skip
+
+---
+
+## Task 3: quip-ref (Lấy Referral Link)
+
+### Chức năng
+Tự động lấy referral link từ quest.quip.network và ghi vào cột `link ref` trong Excel
+
+### Các bước script thực hiện
+1. Mở khóa OKX Wallet
+2. Vào trang quest.quip.network/airdrop (không dùng referral code)
+3. Kiểm tra wallet đã connect chưa → nếu chưa, ghi "not connected" vào Excel
+4. Click "Get My Referral Link"
+5. Đợi popup hiển thị referral link
+6. Copy link và ghi vào cột `link ref` trong Excel
+
+### Lệnh chạy
+```
+node index.js --task quip-ref --group quip --range P-20260329-0001-P-20260329-0020 -c 5
+```
+
+### Kết quả
+- Cột `link ref` trong Excel sẽ chứa referral link hoặc "not connected"
+
+---
+
+## Task 4: quip-post (Post trên X + Claim điểm)
+
+### Chức năng
+Tự động đăng bài trên X (Twitter) về @quipnetwork, submit link lên Quip và claim điểm daily
+
+### Các bước script thực hiện
+1. Mở khóa OKX Wallet
+2. Vào x.com/home, chọn random bài từ `src/tasks/quip-network/posts.txt`
+3. Đăng tweet
+4. Dismiss popup "Got it" nếu có
+5. Lấy link tweet mới nhất từ timeline (thêm `?s=20`)
+6. Vào quest.quip.network/airdrop
+7. Click "Submit Post" (quest "Post about Quip on X Daily")
+8. Nhập link tweet vào input
+9. Click "Claim" → đợi "Great job!"
+10. Nếu claim lần 1 không thành công → reload → kiểm tra Submit Post còn không → retry
+
+### Lệnh chạy
+
+**Chạy 1 profile:**
+```
+node index.js --task quip-post --group quip --profiles P-20260329-0001 -c 1
+```
+
+**Chạy nhiều profile:**
+```
+node index.js --task quip-post --group quip --range P-20260329-0001-P-20260329-0020 -c 5
+```
+
+### Lưu ý
+- Tài khoản X phải đã đăng nhập sẵn trên profile GPM
+- Wallet phải đã connect trên Quip
+- X home cần 15-30s để load compose box (một số profile chậm có thể fail)
+- File `posts.txt` chứa 100 bài viết sẵn, script random chọn 1 bài
+- Nếu muốn thêm/sửa bài viết, edit file `src/tasks/quip-network/posts.txt`
+
+---
+
+## Task 5: github-signup
 
 ### Chức năng
 Tự động đăng ký tài khoản GitHub mới, sử dụng email từ gemmmo.vn để lấy mã xác nhận.
@@ -180,6 +265,7 @@ node index.js --task github-signup --group github --range P-0001-P-0020 -c 3
 - Email phải là email gemmmo.vn (tool tự động lấy mã xác nhận qua API)
 - Captcha cần được giải thủ công (script sẽ đợi tối đa 2 phút)
 - Nên chạy `-c 1` nếu phải giải captcha thủ công
+- Khi đăng ký thành công, cột `github` trong Excel sẽ được ghi "ok"
 
 ---
 

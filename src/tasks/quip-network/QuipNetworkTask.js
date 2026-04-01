@@ -2,7 +2,8 @@ import { By, until } from 'selenium-webdriver';
 import BaseTask from '../BaseTask.js';
 import { sleep } from '../../utils/humanBehavior.js';
 
-const getWebsiteUrl = () => process.env.QUIP_REFERRAL_URL || 'https://quest.quip.network/airdrop';
+const getWebsiteUrl = (account) =>
+  account?.quip_url || process.env.QUIP_REFERRAL_URL || 'https://quest.quip.network/airdrop';
 
 /**
  * Flow verified qua Playwright MCP inspect GPM browser (2026-03-28):
@@ -48,8 +49,8 @@ export default class QuipNetworkTask extends BaseTask {
     await wallet.unlock(walletPassword);
 
     // Step 2: Navigate to Quip
-    logger.info(`Navigating to ${getWebsiteUrl()}`);
-    await driver.get(getWebsiteUrl());
+    logger.info(`Navigating to ${getWebsiteUrl(account)}`);
+    await driver.get(getWebsiteUrl(account));
     await sleep(5000);
 
     // Update mainHandle to the Quip tab (unlock may have changed active tab)
